@@ -6,6 +6,8 @@
 > **Developer:** Solo ([ragibcs](https://github.com/ragibcs/climatechain-bd))  
 > **Status:** Fully Functional Vertical Slice MVP  
 
+![ClimateChain BD Dashboard Preview](docs/dashboard-preview.png)
+
 ---
 
 ## 1. Mission & Differentiator
