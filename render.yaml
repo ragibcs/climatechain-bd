@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: climatechain-bd
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: ALLOW_ALL_ORIGINS
+        value: "true"
+      - key: MODEL_VERSION
+        value: rainfall-indicator-v1
+      - key: CHAIN_ID
+        value: "11155111"
+      - key: OPEN_METEO_BASE_URL
+        value: https://archive-api.open-meteo.com/v1/archive
+      - key: OPEN_METEO_FORECAST_URL
+        value: https://api.open-meteo.com/v1/forecast
+      - key: ETH_RPC_URL
+        sync: false
+      - key: CONTRACT_ADDRESS
+        sync: false
+      - key: SIGNER_PRIVATE_KEY
+        sync: false
+    healthCheckPath: /api/health

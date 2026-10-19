@@ -3,7 +3,7 @@
   "sample_file": "/home/ragib/hdd3/Hackathon/climatechain-bd/data/samples/kanaighat_sample.json",
   "record_count": 15,
   "sha256": "3f45e48dbf21add8f1f9df63c77598793b56c5b127517bf4c0ee5c8b6a9a76d9",
-  "retrieved_at": "2026-10-19T21:57:07.048680+00:00",
+  "retrieved_at": "2026-10-19T22:34:09.230164+00:00",
   "source": "Open-Meteo Historical / Forecast API",
   "citation": "ERA5 / ECMWF reanalysis & numerical weather prediction via Open-Meteo (CC BY 4.0)"
 }

@@ -106,8 +106,8 @@ def test_api_provenance_full_cycle(client):
 
     # 6. Tamper report -> MISMATCH
     tampered = dict(report)
-    tampered["score"] = 0.0
-    tampered["risk_level"] = "LOW"
+    tampered["score"] = 99.9
+    tampered["risk_level"] = "SEVERE"
     res_mismatch = client.post("/api/provenance/verify", json={"report": tampered})
     assert res_mismatch.status_code == 200
     mismatch_data = res_mismatch.json()

@@ -123,6 +123,35 @@ docker-compose up --build
 
 ---
 
+### Option C: Deploy to Render (Render.com)
+
+ClimateChain BD includes a production-ready unified multi-stage `Dockerfile` and a `render.yaml` Blueprint configured to run both the FastAPI intelligence service and the Next.js dashboard seamlessly inside a single container on Render's free or starter tier.
+
+#### Method 1: Render Blueprint (Recommended)
+1. Fork or push this repository to GitHub: `https://github.com/ragibcs/climatechain-bd`.
+2. Log in to [Render Dashboard](https://dashboard.render.com).
+3. Click **New +** -> **Blueprint**.
+4. Select your `climatechain-bd` repository. Render will automatically detect [`render.yaml`](render.yaml) and configure the web service.
+5. Click **Apply**. Render will build the Docker container and deploy the app!
+
+#### Method 2: Manual Web Service
+1. Click **New +** -> **Web Service**.
+2. Connect your repository: `https://github.com/ragibcs/climatechain-bd`.
+3. Choose **Docker** as the Runtime.
+4. Leave **Dockerfile Path** as `./Dockerfile`.
+5. Under **Environment Variables**, set:
+   - `PORT`: `10000` (Render default)
+   - `MODEL_VERSION`: `rainfall-indicator-v1`
+   - `CHAIN_ID`: `11155111`
+   - `ALLOW_ALL_ORIGINS`: `true`
+6. Click **Create Web Service**.
+7. Once deployed, Render provides your live URL (e.g. `https://climatechain-bd.onrender.com`).
+   - Web Dashboard: `https://<your-service>.onrender.com`
+   - API Endpoints: `https://<your-service>.onrender.com/api/predictions`
+   - API Health Check: `https://<your-service>.onrender.com/api/health`
+
+---
+
 ## 5. Verification & Test Results
 
 All test suites execute deterministically:
