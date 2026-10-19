@@ -1,0 +1,1 @@
+"""ClimateChain BD FastAPI Service."""
