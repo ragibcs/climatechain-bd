@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    container_name: climatechain-api
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./climatechain.db
+      - OPEN_METEO_BASE_URL=https://archive-api.open-meteo.com/v1/archive
+      - OPEN_METEO_FORECAST_URL=https://api.open-meteo.com/v1/forecast
+      - MODEL_VERSION=rainfall-indicator-v1
+      - CHAIN_ID=11155111
+      - FRONTEND_ORIGIN=http://localhost:3000
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: climatechain-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
