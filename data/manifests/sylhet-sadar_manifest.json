@@ -1,0 +1,9 @@
+{
+  "location_id": "sylhet-sadar",
+  "sample_file": "/home/ragib/hdd3/Hackathon/climatechain-bd/data/samples/sylhet-sadar_sample.json",
+  "record_count": 45,
+  "sha256": "306a980acd4d43185c4dfe80a9a074edce1eb95bc020764732910e105efbd602",
+  "retrieved_at": "2026-10-19T21:06:22.572511+00:00",
+  "source": "Open-Meteo Historical / Forecast API",
+  "citation": "ERA5 / ECMWF reanalysis & numerical weather prediction via Open-Meteo (CC BY 4.0)"
+}

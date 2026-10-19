@@ -1,0 +1,9 @@
+{
+  "location_id": "zakiganj",
+  "sample_file": "/home/ragib/hdd3/Hackathon/climatechain-bd/data/samples/zakiganj_sample.json",
+  "record_count": 45,
+  "sha256": "85df0551196d1f7a1df1bf4e76876849f5fa600b1b77e3dff84079cce882c3db",
+  "retrieved_at": "2026-10-19T21:06:25.089367+00:00",
+  "source": "Open-Meteo Historical / Forecast API",
+  "citation": "ERA5 / ECMWF reanalysis & numerical weather prediction via Open-Meteo (CC BY 4.0)"
+}

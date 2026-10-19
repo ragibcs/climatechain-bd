@@ -1,0 +1,9 @@
+{
+  "location_id": "sunamganj",
+  "sample_file": "/home/ragib/hdd3/Hackathon/climatechain-bd/data/samples/sunamganj_sample.json",
+  "record_count": 45,
+  "sha256": "062eea93ffab3e08249ba0964f1e2700dd6a5e3ecd3a9d3fb4b9731b0c3ef4e1",
+  "retrieved_at": "2026-10-19T21:06:23.492453+00:00",
+  "source": "Open-Meteo Historical / Forecast API",
+  "citation": "ERA5 / ECMWF reanalysis & numerical weather prediction via Open-Meteo (CC BY 4.0)"
+}

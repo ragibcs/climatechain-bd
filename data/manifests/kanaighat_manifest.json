@@ -1,0 +1,9 @@
+{
+  "location_id": "kanaighat",
+  "sample_file": "/home/ragib/hdd3/Hackathon/climatechain-bd/data/samples/kanaighat_sample.json",
+  "record_count": 45,
+  "sha256": "1565074bfa8da62387561ee703245fe48307126985eb2e11fbd005d3218db8a1",
+  "retrieved_at": "2026-10-19T21:06:24.224844+00:00",
+  "source": "Open-Meteo Historical / Forecast API",
+  "citation": "ERA5 / ECMWF reanalysis & numerical weather prediction via Open-Meteo (CC BY 4.0)"
+}
