@@ -39,11 +39,13 @@ All input weather variables are sourced from ERA5 / ECMWF reanalysis and numeric
 
 $$SRRI = \min\left(100, \, 0.50 \cdot \min\left(100, \frac{R_{1d}}{100} \cdot 100\right) + 0.30 \cdot \min\left(100, \frac{R_{3d}}{200} \cdot 100\right) + 0.20 \cdot \min\left(100, \frac{R_{7d}}{350} \cdot 100\right)\right)$$
 
-### Calibrated Thresholds (BMD Standards)
-- **`LOW` (0–24.9):** Minimal precipitation (< 25 mm).
-- **`MODERATE` (25.0–49.9):** Typical monsoon rain; minor drainage ponding.
-- **`HIGH` (50.0–74.9):** Heavy continuous precipitation (BMD Heavy Rain > 44 mm/day); substantial inundation hazard.
-- **`SEVERE` (75.0–100.0):** Extreme deluge / cloudburst (> 88 mm/day); high danger of flash flooding.
+### Categorical Thresholds
+These are SRRI bands, not raw-rainfall or flood-probability thresholds. The BMD intensity
+classes are used as meteorological context for the 24h component.
+- **`LOW` (0–24.9):** Minimal weighted rainfall stress; typically light rainfall across the windows.
+- **`MODERATE` (25.0–49.9):** Typical monsoon rain; minor drainage ponding possible.
+- **`HIGH` (50.0–74.9):** Heavy continuous rainfall (BMD Heavy Rain > 44 mm/day is a useful reference); substantial inundation hazard.
+- **`SEVERE` (75.0–100.0):** Extreme deluge indicator (BMD Very Heavy > 88 mm/day is a useful reference); high flash-flood danger.
 
 ---
 

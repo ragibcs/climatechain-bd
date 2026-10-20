@@ -18,10 +18,18 @@ services:
         value: https://archive-api.open-meteo.com/v1/archive
       - key: OPEN_METEO_FORECAST_URL
         value: https://api.open-meteo.com/v1/forecast
+      - key: RPC_URL
+        sync: false
       - key: ETH_RPC_URL
         sync: false
       - key: CONTRACT_ADDRESS
         sync: false
+      - key: DEPLOYER_PRIVATE_KEY
+        sync: false
       - key: SIGNER_PRIVATE_KEY
         sync: false
+      - key: OPEN_METEO_CACHE_TTL
+        value: "600"
+      - key: OVERVIEW_CACHE_TTL
+        value: "300"
     healthCheckPath: /api/health

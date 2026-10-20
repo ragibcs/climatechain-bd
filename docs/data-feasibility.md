@@ -24,7 +24,9 @@ In accordance with Section 5 of the project specification (`CLAUDE.md`), an empi
 ### Source 1: Open-Meteo Historical Weather API & Forecast API
 - **Endpoint:** `https://archive-api.open-meteo.com/v1/archive` and `https://api.open-meteo.com/v1/forecast`
 - **Underlying Reanalysis / Model:** ERA5 / ECMWF high-resolution numerical weather prediction.
-- **Access Verification:** Tested live via HTTP GET. Returned valid JSON payload with generation time < 0.2ms.
+- **Access Verification:** Tested live via HTTP GET. Returned a valid JSON payload with daily
+  values for all four configured station coordinates; the ingestion client applies schema,
+  date, duplicate, and range validation rather than assuming completeness.
 - **Variables Accessed:**
   - `precipitation_sum` (Daily total precipitation, mm)
   - `rain_sum` (Daily rainfall, mm)
@@ -37,7 +39,9 @@ In accordance with Section 5 of the project specification (`CLAUDE.md`), an empi
   4. `zakiganj` (Kushiyara entry, Lat: 24.8833, Lon: 92.3667)
 - **Temporal Coverage:** Multi-year daily historical observations (2020 to present) + trailing 7 days + 7-day deterministic forecast.
 - **Units:** Metric (`mm`, `°C`, `km/h`, `ISO-8601` timestamps).
-- **Missingness:** 0.0% missing daily values in retrieved query intervals; API explicitly returns `null` if unavailable.
+- **Missingness:** The retrieved June–July 2024 sample intervals are complete, but the
+  pipeline still validates every row and never silently fills an absent value. The upstream
+  API can return `null`; missing values are not interpolated or relabelled.
 - **Licence & Attribution:** Creative Commons Attribution 4.0 International (CC BY 4.0) / Open Database Licence (ODbL). Attribution to Open-Meteo and Copernicus ERA5/ECMWF included.
 
 ### Source 2: FFWC / BWDB (Bangladesh Flood Forecasting and Warning Centre)
@@ -69,8 +73,8 @@ The standard tabular schema for all ingested observations conforms strictly to S
 | `river_level_m` | Float | Yes | Measured water level (m PWD), null if unmetered |
 | `danger_level_m` | Float | Yes | Official BWDB danger level threshold |
 | `flood_label` | Integer | Yes | Binary ground truth (null: unverified) |
-| `source_id` | String | No | e.g. `open-meteo-era5` |
-| `quality_flag` | String | No | `VALID`, `SUSPICIOUS`, `MISSING_ESTIMATED` |
+| `source_id` | String | No | e.g. `open-meteo-ecmwf` |
+| `quality_flag` | String | No | `VALID`, `PARTIAL`, `MISSING`, `MISSING_DATE`, `INVALID_NEGATIVE`, `INVALID_TYPE`, or `SUSPICIOUS_HIGH` |
 
 ---
 
@@ -78,19 +82,21 @@ The standard tabular schema for all ingested observations conforms strictly to S
 
 Because flood labels are unverified, our engine computes a deterministic **Sylhet Rainfall Risk Index (SRRI)**:
 
-$$SRRI = \min\left(100, \, w_1 \cdot R_{1d} + w_3 \cdot \frac{R_{3d}}{3} + w_7 \cdot \frac{R_{7d}}{7}\right)$$
+$$SRRI = 0.50 \cdot \min\left(100, \frac{R_{1d}}{100} \cdot 100\right) + 0.30 \cdot \min\left(100, \frac{R_{3d}}{200} \cdot 100\right) + 0.20 \cdot \min\left(100, \frac{R_{7d}}{350} \cdot 100\right)$$
 
 Where:
-- $R_{1d}$ = 24h precipitation (mm)
-- $R_{3d}$ = Trailing 3-day cumulative precipitation (mm)
-- $R_{7d}$ = Trailing 7-day cumulative precipitation (mm)
-- Weights: $w_1 = 0.5$, $w_3 = 0.3$, $w_7 = 0.2$ (prioritizing acute flash rain while accounting for antecedent soil saturation in the haor basin).
+- $R_{1d}$ = 24h precipitation (mm), saturation at 100 mm
+- $R_{3d}$ = trailing past-only 3-day precipitation (mm), saturation at 200 mm
+- $R_{7d}$ = trailing past-only 7-day precipitation (mm), saturation at 350 mm
+- Weights: $w_1 = 0.50$, $w_3 = 0.30$, $w_7 = 0.20$ (prioritizing acute flash rain while accounting for antecedent soil saturation in the haor basin).
 
 ### Categorical Risk Mapping:
-- **`LOW` (0 - 24):** Normal rainfall or dry conditions.
-- **`MODERATE` (25 - 49):** Typical monsoon showers; localized drainage congestion possible.
-- **`HIGH` (50 - 74):** Heavy continuous rainfall; high probability of urban inundation and river water rise.
-- **`SEVERE` (75 - 100):** Extreme downpour / cloudburst (>150mm cumulative); flash flood risk in Surma piedmont basin.
+- **`LOW` (0–24.9):** Normal rainfall or dry conditions.
+- **`MODERATE` (25.0–49.9):** Typical monsoon showers; localized drainage congestion possible.
+- **`HIGH` (50.0–74.9):** Heavy continuous rainfall; significant inundation and river-rise risk.
+- **`SEVERE` (75.0–100):** Extreme deluge indicator; flash-flood risk in the Surma piedmont basin.
+
+These are rainfall-intensity bands, not calibrated flood probabilities.
 
 ---
 

@@ -23,6 +23,18 @@ def test_api_health(client):
     assert data["status"] == "healthy"
     assert "environment" in data
     assert "dependencies" in data
+    assert data["environment"]["provenance_mode"] in [
+        "ONCHAIN",
+        "ONCHAIN_READ_ONLY",
+        "SIMULATED_FALLBACK",
+        "LOCAL_SIMULATOR",
+    ]
+    assert data["environment"]["provenance_write_enabled"] is False
+    assert data["dependencies"]["open_meteo_api"] in [
+        "not_probed",
+        "available",
+        "unavailable",
+    ]
 
 
 def test_api_locations(client):
@@ -78,10 +90,10 @@ def test_api_provenance_full_cycle(client):
     })
     report = res_pred.json()
 
-    # 2. Register report on-chain
+    # 2. Register the report commitment (simulator in the test environment)
     res_reg = client.post("/api/provenance/register", json={
         "report": report,
-        "metadata_uri": "ipfs://QmTestMetadataKanaighat"
+        "metadata_uri": "urn:climatechain:test:kanaighat"
     })
     assert res_reg.status_code == 200
     reg_data = res_reg.json()
@@ -118,3 +130,109 @@ def test_api_provenance_full_cycle(client):
     blockchain_client.simulate_rpc_failure = True
     res_fail = client.get(f"/api/provenance/{report_id}")
     assert res_fail.status_code == 503
+
+
+def test_api_overview_snapshot(client):
+    res = client.get("/api/overview?live=false")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["station_count"] == 4
+    assert len(data["stations"]) == 4
+    assert data["basin_score"] is not None
+    assert data["basin_risk_level"] in ["LOW", "MODERATE", "HIGH", "SEVERE"]
+    assert data["data_mode"] == "OFFLINE_CACHE"
+    assert data["highest_risk_station"] in [station["id"] for station in data["stations"]]
+    for station in data["stations"]:
+        assert station["score"] is not None
+        assert station["risk_level"] in ["LOW", "MODERATE", "HIGH", "SEVERE", "UNKNOWN"]
+        assert isinstance(station["sparkline"], list)
+
+
+def test_api_overview_historical_scenario(client):
+    res = client.get("/api/overview?as_of=2024-06-19&live=false")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["as_of"] == "2024-06-19"
+    assert data["data_mode"] == "HISTORICAL_REANALYSIS"
+    assert all(station["as_of"] <= "2024-06-19" for station in data["stations"])
+
+    bad = client.get("/api/overview?as_of=not-a-date")
+    assert bad.status_code == 422
+
+
+def test_api_forecast_contract(client):
+    res = client.get("/api/forecast?location_id=sylhet-sadar&days=7")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["location_id"] == "sylhet-sadar"
+    assert "available" in data
+    assert isinstance(data["forecast"], list)
+    if data["available"]:
+        assert data["data_mode"] == "FORECAST"
+        assert data["days"] == len(data["forecast"])
+        assert data["risk_level"] in ["LOW", "MODERATE", "HIGH", "SEVERE"]
+
+    bad = client.get("/api/forecast?location_id=non-existent-area")
+    assert bad.status_code == 404
+
+
+def test_api_dataset_manifest_integrity(client):
+    res = client.get("/api/datasets")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["dataset_count"] >= 4
+    assert data["integrity_verified_count"] == data["dataset_count"]
+    for dataset in data["datasets"]:
+        assert dataset["integrity_verified"] is True
+        assert dataset["sha256"] == dataset["computed_sha256"]
+        assert dataset["record_count"] > 0
+
+
+def test_api_rejects_invalid_date_and_forecast_registration(client):
+    assert client.get("/api/risk?location_id=sylhet-sadar&as_of=2024-13-40").status_code == 422
+    assert client.get("/api/observations?location_id=sylhet-sadar&start_date=bad").status_code == 422
+
+    forecast_report = {
+        "location_id": "sylhet-sadar",
+        "as_of": "2026-10-20",
+        "target": "rainfall_risk_indicator",
+        "model_version": "rainfall-indicator-v1",
+        "risk_level": "HIGH",
+        "data_mode": "FORECAST",
+    }
+    res = client.post("/api/provenance/register", json={"report": forecast_report})
+    assert res.status_code == 422
+    assert "Forecast" in res.json()["detail"]
+
+
+def test_api_provenance_validation_and_registry(client):
+    # Incomplete report payloads are rejected before hashing.
+    invalid = client.post("/api/provenance/register", json={"report": {"location_id": "sylhet-sadar"}})
+    assert invalid.status_code == 422
+
+    invalid_verify = client.post("/api/provenance/verify", json={"report": {}})
+    assert invalid_verify.status_code == 422
+
+    invalid_id = client.get("/api/provenance/0x1234")
+    assert invalid_id.status_code == 422
+
+    # Registry starts empty, then reflects a successful registration.
+    empty = client.get("/api/provenance/registry")
+    assert empty.status_code == 200
+    assert empty.json()["count"] == 0
+
+    report = client.post(
+        "/api/predictions",
+        json={"location_id": "zakiganj", "as_of": "2024-06-20", "use_live_api": False},
+    ).json()
+    registered = client.post("/api/provenance/register", json={"report": report})
+    assert registered.status_code == 200
+
+    registry = client.get("/api/provenance/registry")
+    assert registry.status_code == 200
+    payload = registry.json()
+    assert payload["count"] == 1
+    assert payload["mode"] in ["LOCAL_SIMULATOR", "SIMULATED_FALLBACK"]
+    assert payload["write_enabled"] is False
+    assert payload["records"][0]["report_id"] == registered.json()["record"]["report_id"]
+    assert payload["records"][0]["network"].startswith(("Local Simulator", "Sepolia Testnet"))

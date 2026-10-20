@@ -23,7 +23,8 @@ def main():
         records = fetch_open_meteo_observations(
             location_id=loc_id,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            persist=True
         )
         logger.info(f"Location {loc_id}: ingested and validated {len(records)} daily records.")
         total_records += len(records)

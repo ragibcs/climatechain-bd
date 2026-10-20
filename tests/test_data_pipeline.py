@@ -3,8 +3,10 @@ Tests for data ingestion, schema integrity, rolling windows, and validation rule
 """
 
 import pytest
+import requests
 from datetime import datetime, date, timedelta
 from ml.data.locations import SYLHET_LOCATIONS, get_location_by_id
+import ml.data.ingestion as ingestion
 from ml.data.ingestion import validate_observation, load_cached_samples
 from ml.features import compute_rolling_precipitation, compute_rainfall_risk_indicator
 
@@ -81,6 +83,23 @@ def test_rolling_window_correctness_and_no_future_leakage():
     assert enriched[9]["date"] == "2024-06-10"
     assert enriched[9]["rainfall_3d_mm"] == 270.0
     assert enriched[9]["rainfall_7d_mm"] == 490.0
+
+
+def test_offline_fallback_is_explicitly_labelled(monkeypatch):
+    ingestion.clear_cache()
+
+    def _offline(*args, **kwargs):
+        raise requests.RequestException("simulated upstream outage")
+
+    monkeypatch.setattr(ingestion.requests, "get", _offline)
+    records, quality = ingestion.fetch_open_meteo_observations_with_status(
+        "sylhet-sadar", "2024-06-01", "2024-06-19"
+    )
+
+    assert records, "Committed sample should be available for offline fallback"
+    assert quality == "DEGRADED_OFFLINE_CACHE"
+    assert ingestion.get_upstream_status()["open_meteo"] == "unavailable"
+    ingestion.clear_cache()
 
 
 def test_cached_samples_integrity():

@@ -42,9 +42,20 @@ class BlockchainClient:
         private_key: Optional[str] = None,
         chain_id: int = 11155111
     ):
-        self.rpc_url = rpc_url or os.getenv("RPC_URL")
+        # Accept both the original variable names and the names exposed in
+        # render.yaml / common hosting dashboards.
+        self.rpc_url = (
+            rpc_url
+            or os.getenv("RPC_URL")
+            or os.getenv("ETH_RPC_URL")
+            or os.getenv("SEPOLIA_RPC_URL")
+        )
         self.contract_address = contract_address or os.getenv("CONTRACT_ADDRESS")
-        self.private_key = private_key or os.getenv("DEPLOYER_PRIVATE_KEY")
+        self.private_key = (
+            private_key
+            or os.getenv("DEPLOYER_PRIVATE_KEY")
+            or os.getenv("SIGNER_PRIVATE_KEY")
+        )
         self.chain_id = int(os.getenv("CHAIN_ID", chain_id))
         
         self.w3: Optional[Web3] = None
@@ -84,11 +95,14 @@ class BlockchainClient:
         self,
         report: Dict[str, Any],
         observations_snapshot: Optional[Any] = None,
-        metadata_uri: str = "ipfs://climatechain-bd-report-manifest"
+        metadata_uri: str = "urn:climatechain:report-manifest"
     ) -> Dict[str, Any]:
         """
-        Registers a report commitment on-chain.
-        Calculates report_id, report_hash, data_hash, submits tx or stores in simulated registry.
+        Registers a report commitment.
+
+        A real transaction is only submitted when an RPC, contract, and signer
+        key are all available. Otherwise the record is stored in the local
+        simulator and every response is labelled accordingly.
         """
         if self.simulate_rpc_failure:
             raise ConnectionError("Simulated EVM RPC failure")
@@ -112,6 +126,8 @@ class BlockchainClient:
                 if "already registered" in str(e).lower():
                     raise
                 logger.warning(f"Error querying on-chain existence: {e}")
+
+        used_onchain = False
 
         # If live private key and contract available, send real tx
         if self.contract and self.w3 and self.w3.is_connected() and self.private_key:
@@ -148,10 +164,16 @@ class BlockchainClient:
                 block_number = receipt.blockNumber
                 submitter = account.address
                 registered_at = datetime.now(timezone.utc).isoformat()
+                used_onchain = True
             except Exception as e:
                 logger.error(f"Failed to submit on-chain tx: {e}")
                 raise
         else:
+            if self.contract and self.w3 and self.w3.is_connected():
+                logger.warning(
+                    "EVM contract is reachable but no signer key is configured; "
+                    "storing the commitment in the labelled local simulator."
+                )
             # Fallback simulator for testnet testing without spending gas
             if report_id_hex in self._local_registry:
                 raise ValueError(f"Report {report_id_hex} is already registered.")
@@ -171,21 +193,68 @@ class BlockchainClient:
             "block_number": block_number,
             "registered_at": registered_at,
             "submitter": submitter,
-            "network": "Sepolia Testnet (Simulated / Local)" if not self.contract else "Sepolia Testnet"
+            "network": "Sepolia Testnet" if used_onchain else "Local Simulator / Graceful Fallback",
+            "mode": "ONCHAIN" if used_onchain else ("SIMULATED_FALLBACK" if self.rpc_url else "LOCAL_SIMULATOR"),
         }
 
         self._local_registry[report_id_hex] = record
         return record
 
+    @property
+    def can_write_onchain(self) -> bool:
+        """True only when a real signed transaction can be attempted."""
+        try:
+            return bool(
+                self.contract
+                and self.w3
+                and self.w3.is_connected()
+                and self.private_key
+            )
+        except Exception:
+            return False
+
+    @property
+    def can_read_onchain(self) -> bool:
+        """True when a deployed contract is reachable (even without a signer)."""
+        try:
+            return bool(self.contract and self.w3 and self.w3.is_connected())
+        except Exception:
+            return False
+
+    @property
+    def mode(self) -> str:
+        """Human-readable write mode shown in the dashboard."""
+        if self.can_write_onchain:
+            return "ONCHAIN"
+        if self.can_read_onchain:
+            return "ONCHAIN_READ_ONLY"
+        if self.rpc_url:
+            return "SIMULATED_FALLBACK"
+        return "LOCAL_SIMULATOR"
+
+    def list_local_records(self) -> list:
+        """Returns locally registered commitments, newest first (audit trail)."""
+        records = list(self._local_registry.values())
+        return sorted(records, key=lambda r: r.get("registered_at", ""), reverse=True)
+
     def get_registered_record(self, report_id: str) -> Optional[Dict[str, Any]]:
-        """Reads on-chain record or local simulator registry."""
+        """
+        Reads a commitment from the reachable contract, or from the local
+        simulator when no contract is configured.
+
+        If a contract is configured but the read fails, we raise instead of
+        silently falling back to a local record. That preserves the
+        `UNAVAILABLE != NOT_FOUND` distinction.
+        """
         if self.simulate_rpc_failure:
             raise ConnectionError("RPC provider unreachable")
 
-        # Try live contract first
-        if self.contract and self.w3 and self.w3.is_connected():
+        if self.can_read_onchain:
             try:
                 report_id_bytes = bytes.fromhex(report_id[2:] if report_id.startswith("0x") else report_id)
+                is_registered = self.contract.functions.isReportRegistered(report_id_bytes).call()
+                if not is_registered:
+                    return None
                 rec = self.contract.functions.getReport(report_id_bytes).call()
                 # rec is tuple (reportId, dataHash, reportHash, modelVersion, metadataUri, registeredAt, submitter)
                 return {
@@ -195,12 +264,14 @@ class BlockchainClient:
                     "model_version": rec[3],
                     "metadata_uri": rec[4],
                     "registered_at": rec[5],
-                    "submitter": rec[6]
+                    "submitter": rec[6],
+                    "network": "Sepolia Testnet",
+                    "mode": "ONCHAIN",
                 }
             except Exception as e:
-                logger.warning(f"Contract getReport failed or not found: {e}")
+                raise ConnectionError(f"Could not read the on-chain registry: {e}") from e
 
-        # Fallback to local simulator
+        # Local simulator only when no contract is reachable.
         return self._local_registry.get(report_id)
 
     def verify_report(self, report: Dict[str, Any], report_id: Optional[str] = None) -> Dict[str, Any]:
@@ -211,10 +282,11 @@ class BlockchainClient:
         if self.simulate_rpc_failure:
             return {
                 "status": ProvenanceVerificationState.UNAVAILABLE,
-                "reason": "Blockchain RPC is unreachable or disconnected.",
+                "reason": "RPC is unreachable or the registry is unavailable; no verdict was guessed.",
                 "computed_hash": None,
                 "onchain_hash": None,
-                "verified": False
+                "verified": False,
+                "mode": self.mode,
             }
 
         # Calculate canonical hash from provided report
@@ -228,10 +300,11 @@ class BlockchainClient:
         except ConnectionError as ce:
             return {
                 "status": ProvenanceVerificationState.UNAVAILABLE,
-                "reason": f"RPC outage: {str(ce)}",
+                "reason": f"Registry read failed: {str(ce)}",
                 "computed_hash": computed_hash,
                 "onchain_hash": None,
-                "verified": False
+                "verified": False,
+                "mode": self.mode,
             }
         except Exception as e:
             return {
@@ -239,37 +312,41 @@ class BlockchainClient:
                 "reason": f"Dependency error: {str(e)}",
                 "computed_hash": computed_hash,
                 "onchain_hash": None,
-                "verified": False
+                "verified": False,
+                "mode": self.mode,
             }
 
         if not record:
             return {
                 "status": ProvenanceVerificationState.NOT_FOUND,
-                "reason": f"No on-chain commitment found for report ID {rep_id}.",
+                "reason": f"No registry commitment found for report ID {rep_id}.",
                 "computed_hash": computed_hash,
                 "onchain_hash": None,
                 "verified": False,
-                "report_id": rep_id
+                "report_id": rep_id,
+                "mode": self.mode,
             }
 
         onchain_hash = record["report_hash"]
         if computed_hash.lower() == onchain_hash.lower():
             return {
                 "status": ProvenanceVerificationState.VERIFIED,
-                "reason": "Report content matches the on-chain cryptographic commitment exactly.",
+                "reason": "Report content matches the stored cryptographic commitment exactly.",
                 "computed_hash": computed_hash,
                 "onchain_hash": onchain_hash,
                 "verified": True,
                 "report_id": rep_id,
-                "record": record
+                "record": record,
+                "mode": self.mode,
             }
         else:
             return {
                 "status": ProvenanceVerificationState.MISMATCH,
-                "reason": "Report content has been altered or tampered with! Computed hash does not match stored commitment.",
+                "reason": "Report content has been altered or tampered with. The computed hash does not match the stored commitment.",
                 "computed_hash": computed_hash,
                 "onchain_hash": onchain_hash,
                 "verified": False,
                 "report_id": rep_id,
-                "record": record
+                "record": record,
+                "mode": self.mode,
             }

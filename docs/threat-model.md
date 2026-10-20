@@ -1,10 +1,10 @@
 # Threat Model & Security Analysis
 
 ## 1. Scope & System Assets
-ClimateChain BD registers commitments to climate intelligence reports on an EVM blockchain. Assets include:
+ClimateChain BD registers commitments to climate intelligence reports on an EVM blockchain when a signer is configured. Without a signer, the same commitments are kept in a clearly labelled local simulator for demonstration; simulator records are never presented as blockchain transactions. Assets include:
 1. **Raw Weather Data Snapshots:** Off-chain observations and rolling calculations.
 2. **Prediction Reports:** Risk evaluations, scores, factors, and limitations.
-3. **On-Chain Commitments:** Deterministic `reportId`, `dataHash`, and `reportHash` stored in `ClimateProvenance.sol`.
+3. **Commitments:** Deterministic `reportId`, `dataHash`, and `reportHash` stored in `ClimateProvenance.sol` or the labelled simulator.
 4. **Deployer Private Keys:** Testnet signer keys used by the backend.
 
 ---
@@ -13,7 +13,7 @@ ClimateChain BD registers commitments to climate intelligence reports on an EVM 
 
 | Threat | Attack Vector | Potential Impact | Mitigation in ClimateChain BD |
 |---|---|---|---|
-| **Report Tampering** | Malicious actor modifies risk score or limitations in transit or database | User acts on falsified risk output | Canonical SHA-256 hash recalculation against on-chain `reportHash` immediately flags tampering as `MISMATCH`. |
+| **Report Tampering** | Malicious actor modifies risk score or limitations in transit or database | User acts on falsified risk output | Canonical SHA-256 hash recalculation against the stored `reportHash` immediately flags tampering as `MISMATCH` (on-chain or simulator record). |
 | **Data Falsification** | Fabricating weather readings or inventing unmonitored river levels | Model outputs misleading emergency claims | River level and flood ground-truth are marked nullable (`null`). Unmonitored status is prominently disclosed; Open-Meteo source digests are hashed in manifests. |
 | **Front-Running / Replay** | Attacker attempts to register someone else's report or re-register existing ID | Storage pollution or duplicate confusion | Contract strictly rejects duplicate `reportId` (`ReportAlreadyRegistered`). Report IDs are derived deterministically from `(location_id, as_of, model_version)`. |
 | **RPC Outage / Denial of Service** | Testnet node or Infura/Alchemy endpoint becomes unreachable | App crashes or claims report is invalid | Verification engine explicitly distinguishes `UNAVAILABLE` from `MISMATCH`. Never converts network failure into false tampering alerts. |
