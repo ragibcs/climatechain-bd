@@ -14,8 +14,9 @@ WORKDIR /app/apps/web
 COPY apps/web/package*.json ./
 RUN npm ci
 
-# Copy frontend source files and run Next.js production build
+# Copy frontend source files, ensure public exists, and run Next.js production build
 COPY apps/web/ ./
+RUN mkdir -p /app/apps/web/public
 RUN npm run build
 
 # Prune devDependencies to keep the production layer compact
